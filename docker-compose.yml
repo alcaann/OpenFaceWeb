@@ -1,0 +1,11 @@
+services:
+  openface-web:
+    build: .
+    ports:
+      - "5000:5000"
+    volumes:
+      # Optional: mount weights directory to persist model files
+      - ./OpenFace-3.0/weights:/app/OpenFace-3.0/weights
+    environment:
+      - FLASK_ENV=production
+    restart: unless-stopped

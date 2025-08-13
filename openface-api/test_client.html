@@ -295,8 +295,13 @@
                 updateStatus(`Connected - ${data.message}`, 'connected');
             });
             
-            socket.on('frame_result', function(data) {
+            socket.on('analysis_result', function(data) {
                 handleAnalysisResult(data);
+            });
+            
+            socket.on('analysis_error', function(data) {
+                console.error('Analysis error:', data.error);
+                updateStatus('Analysis error: ' + data.error, 'disconnected');
             });
             
             socket.on('connect_error', function(error) {
@@ -470,10 +475,7 @@
             const scaleX = canvas.width / data.frame_info.width;
             const scaleY = canvas.height / data.frame_info.height;
             
-            data.faces.forEach((faceData, index) => {
-                const face = faceData.face;
-                const analysis = faceData.analysis;
-                
+            data.faces.forEach((face, index) => {
                 // Scale bounding box
                 const bbox = [
                     face.bbox[0] * scaleX,
@@ -504,20 +506,20 @@
                 }
                 
                 // Draw emotion
-                if (analysis && analysis.emotion) {
+                if (face.emotion) {
                     ctx.fillStyle = '#0066cc';
                     ctx.font = '12px Arial';
-                    const emotionText = `${analysis.emotion.label}: ${(analysis.emotion.confidence * 100).toFixed(1)}%`;
+                    const emotionText = `${face.emotion.label}: ${(face.emotion.confidence * 100).toFixed(1)}%`;
                     ctx.fillText(emotionText, bbox[0], bbox[3] + 15);
                 }
                 
                 // Draw gaze arrow
-                if (analysis && analysis.gaze) {
+                if (face.gaze) {
                     const centerX = (bbox[0] + bbox[2]) / 2;
                     const centerY = (bbox[1] + bbox[3]) / 2;
                     const arrowLength = 40;
-                    const endX = centerX + analysis.gaze.x * arrowLength;
-                    const endY = centerY + analysis.gaze.y * arrowLength;
+                    const endX = centerX + face.gaze.yaw * arrowLength;
+                    const endY = centerY + face.gaze.pitch * arrowLength;
                     
                     ctx.strokeStyle = '#ff6600';
                     ctx.lineWidth = 3;
@@ -537,8 +539,8 @@
                 }
                 
                 // Draw top Action Units
-                if (analysis && analysis.action_units) {
-                    const auEntries = Object.entries(analysis.action_units)
+                if (face.action_units && face.action_units.all_aus) {
+                    const auEntries = Object.entries(face.action_units.all_aus)
                         .filter(([au, intensity]) => intensity > 0.3)
                         .sort(([,a], [,b]) => b - a)
                         .slice(0, 3);
@@ -574,10 +576,7 @@
                 </div>
             `;
             
-            data.faces.forEach((faceData, index) => {
-                const face = faceData.face;
-                const analysis = faceData.analysis;
-                
+            data.faces.forEach((face, index) => {
                 html += `
                     <div class="face-info">
                         <h4>Face ${index + 1}</h4>
@@ -587,24 +586,24 @@
                             </div>
                 `;
                 
-                if (analysis && analysis.emotion) {
+                if (face.emotion) {
                     html += `
                             <div class="info-item">
-                                <strong>Emotion:</strong> ${analysis.emotion.label} (${(analysis.emotion.confidence * 100).toFixed(1)}%)
+                                <strong>Emotion:</strong> ${face.emotion.label} (${(face.emotion.confidence * 100).toFixed(1)}%)
                             </div>
                     `;
                 }
                 
-                if (analysis && analysis.gaze) {
+                if (face.gaze) {
                     html += `
                             <div class="info-item">
-                                <strong>Gaze:</strong> X: ${analysis.gaze.x.toFixed(2)}, Y: ${analysis.gaze.y.toFixed(2)}
+                                <strong>Gaze:</strong> Pitch: ${face.gaze.pitch.toFixed(2)}, Yaw: ${face.gaze.yaw.toFixed(2)}
                             </div>
                     `;
                 }
                 
-                if (analysis && analysis.action_units) {
-                    const activeAUs = Object.entries(analysis.action_units)
+                if (face.action_units && face.action_units.all_aus) {
+                    const activeAUs = Object.entries(face.action_units.all_aus)
                         .filter(([au, intensity]) => intensity > 0.3)
                         .sort(([,a], [,b]) => b - a)
                         .slice(0, 5)
