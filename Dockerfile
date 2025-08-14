@@ -18,23 +18,12 @@ RUN apt-get update && apt-get install -y \
     libavcodec-dev \
     libavformat-dev \
     libswscale-dev \
-    wget \
     && rm -rf /var/lib/apt/lists/*
 
-# Download and install requirements files before copying the project
-# This allows Docker to cache the pip install layers if requirements don't change
-
-# Download OpenFace-3.0 requirements
-RUN wget -O openface_requirements.txt https://raw.githubusercontent.com/CMU-MultiComp-Lab/OpenFace-3.0/main/requirements.txt
-RUN pip install -r openface_requirements.txt
-
-# Download STAR requirements  
-RUN wget -O star_requirements.txt https://raw.githubusercontent.com/ZhenglinZhou/STAR/master/requirements-py310.txt
-RUN pip install -r star_requirements.txt
-
-# Copy and install openface-api requirements
-COPY openface-api/requirements.txt ./api_requirements.txt
-RUN pip install -r api_requirements.txt
+# Download and install consolidated requirements
+# This avoids version conflicts and reduces memory usage
+COPY consolidated_requirements.txt ./
+RUN pip install --no-cache-dir -r consolidated_requirements.txt
 
 # Copy project files
 COPY . .
@@ -49,7 +38,7 @@ RUN cp setup-info/.gitmodules OpenFace-3.0/.gitmodules
 RUN cd OpenFace-3.0 && git submodule update --init
 
 # Install openface-test package
-RUN pip install openface-test
+RUN pip install --no-cache-dir openface-test
 
 # Download OpenFace models and move them to the correct location
 RUN openface download --output aux && \
