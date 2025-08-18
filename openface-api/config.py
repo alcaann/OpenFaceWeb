@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Configuration for OpenFace API
-Handles path resolution and model loading
+Handles path resolution, model loading, and API settings
 """
 
 import os
@@ -148,8 +148,25 @@ class OpenFaceAPIConfig:
         
         print()
 
+# API Configuration Constants
+class APIConfig:
+    """API-specific configuration constants"""
+    HOST = os.getenv('API_HOST', '0.0.0.0')
+    PORT = int(os.getenv('API_PORT', 5000))
+    DEBUG = os.getenv('FLASK_ENV', 'development') == 'development'
+    
+    # Detection thresholds
+    CONFIDENCE_THRESHOLD = float(os.getenv('CONFIDENCE_THRESHOLD', 0.5))
+    NMS_THRESHOLD = float(os.getenv('NMS_THRESHOLD', 0.4))
+    VIS_THRESHOLD = float(os.getenv('VIS_THRESHOLD', 0.5))
+    
+    # Model labels
+    EMOTION_LABELS = ['Neutral', 'Happy', 'Sad', 'Surprise', 'Fear', 'Disgust', 'Anger', 'Contempt']
+    AU_LABELS = ['AU1', 'AU2', 'AU4', 'AU6', 'AU9', 'AU12', 'AU25', 'AU26']  # DISFA common AUs
+
 # Default configuration instance
 config = OpenFaceAPIConfig()
+api_config = APIConfig()
 
 if __name__ == "__main__":
     config.print_status()

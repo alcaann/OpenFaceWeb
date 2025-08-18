@@ -1,0 +1,485 @@
+openapi: 3.0.3
+info:
+  title: OpenFace-3.0 API
+  description: |
+    Real-time facial analysis API using WebSockets that integrates with the OpenFace-3.0 models.
+    
+    ## Features
+    - **Real-time Analysis**: WebSocket-based API for live video stream processing
+    - **Face Detection**: RetinaFace (primary) with OpenCV fallback
+    - **Facial Analysis**: 
+      - Emotion recognition (8 emotions)
+      - Action Units detection (20 AUs)
+      - Gaze estimation (pitch/yaw)
+      - Facial landmarks (5 key points)
+    - **Web Interface**: HTML test client with live video feed
+    - **Cross-platform**: Works on Windows, Linux, and macOS
+    
+    ## Getting Started
+    1. Start the server: `python app.py`
+    2. Open `test_client.html` in a web browser
+    3. Connect to WebSocket and start analysis
+    
+  version: 3.0.0
+  contact:
+    name: OpenFace API Support
+  license:
+    name: MIT
+servers:
+  - url: http://localhost:5000
+    description: Development server
+  - url: http://0.0.0.0:5000
+    description: Local server (all interfaces)
+
+paths:
+  /:
+    get:
+      summary: API Information
+      description: Get API status and system information
+      responses:
+        '200':
+          description: API information
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SystemInfo'
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /health:
+    get:
+      summary: Health Check
+      description: Check API health and system status
+      responses:
+        '200':
+          description: Health status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthStatus'
+        '500':
+          description: Unhealthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/analyze:
+    post:
+      summary: Analyze Image
+      description: Upload an image for facial analysis
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                image:
+                  type: string
+                  format: binary
+                  description: Image file to analyze
+              required:
+                - image
+      responses:
+        '200':
+          description: Analysis results
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnalysisResult'
+        '400':
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Analysis failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/logs:
+    get:
+      summary: Get API Logs
+      description: Retrieve recent API logs
+      responses:
+        '200':
+          description: Log entries
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  logs:
+                    type: array
+                    items:
+                      type: object
+                  total:
+                    type: integer
+
+  /api/logs/files:
+    get:
+      summary: Get Log Files
+      description: List available log files
+      responses:
+        '200':
+          description: Log file list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  files:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        name:
+                          type: string
+                        size_mb:
+                          type: number
+                        modified:
+                          type: number
+
+  /api/logs/clients:
+    get:
+      summary: Get Active Clients
+      description: List active WebSocket clients
+      responses:
+        '200':
+          description: Active client list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  clients:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ClientInfo'
+                  total:
+                    type: integer
+
+  /api/logs/client/{clientId}:
+    get:
+      summary: Get Client Logs
+      description: Get logs for a specific WebSocket client
+      parameters:
+        - name: clientId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Client logs
+        '404':
+          description: Client not found
+
+components:
+  schemas:
+    SystemInfo:
+      type: object
+      properties:
+        service:
+          type: string
+          example: "OpenFace-3.0 Flask API"
+        version:
+          type: string
+          example: "3.0"
+        status:
+          type: string
+          example: "running"
+        endpoints:
+          type: object
+        system:
+          type: object
+          properties:
+            python_version:
+              type: string
+            cpu_count:
+              type: integer
+            memory_total_gb:
+              type: number
+            memory_available_gb:
+              type: number
+        openface:
+          type: object
+          properties:
+            project_path:
+              type: string
+            weights_path:
+              type: string
+            model_available:
+              type: boolean
+        gpu:
+          type: object
+          properties:
+            available:
+              type: boolean
+            device_count:
+              type: integer
+            device_name:
+              type: string
+
+    HealthStatus:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [healthy, unhealthy]
+        timestamp:
+          type: number
+        cpu_percent:
+          type: number
+        memory_percent:
+          type: number
+        models:
+          type: object
+          properties:
+            retinaface:
+              $ref: '#/components/schemas/ModelStatus'
+            mlt:
+              $ref: '#/components/schemas/ModelStatus'
+            star:
+              $ref: '#/components/schemas/ModelStatus'
+        analyzer:
+          type: object
+          properties:
+            initialized:
+              type: boolean
+            torch_available:
+              type: boolean
+            cuda_available:
+              type: boolean
+
+    ModelStatus:
+      type: object
+      properties:
+        available:
+          type: boolean
+        path:
+          type: string
+        size_mb:
+          type: number
+
+    AnalysisResult:
+      type: object
+      properties:
+        success:
+          type: boolean
+        timestamp:
+          type: number
+        processing_time_ms:
+          type: number
+        frame_info:
+          type: object
+          properties:
+            width:
+              type: integer
+            height:
+              type: integer
+        faces_detected:
+          type: integer
+        faces:
+          type: array
+          items:
+            $ref: '#/components/schemas/FaceAnalysis'
+        system_info:
+          type: object
+          properties:
+            device:
+              type: string
+            face_detector:
+              type: string
+            analysis_model:
+              type: string
+
+    FaceAnalysis:
+      type: object
+      properties:
+        face_id:
+          type: integer
+        bbox:
+          type: array
+          items:
+            type: integer
+          minItems: 4
+          maxItems: 4
+          description: "[x1, y1, x2, y2]"
+        confidence:
+          type: number
+          minimum: 0
+          maximum: 1
+        landmarks:
+          type: array
+          items:
+            type: array
+            items:
+              type: integer
+            minItems: 2
+            maxItems: 2
+          description: "Array of [x, y] landmark points"
+        emotion:
+          type: object
+          properties:
+            label:
+              type: string
+              enum: [Neutral, Happy, Sad, Surprise, Fear, Disgust, Anger, Contempt]
+            confidence:
+              type: number
+              minimum: 0
+              maximum: 1
+            all_emotions:
+              type: object
+              additionalProperties:
+                type: number
+                minimum: 0
+                maximum: 1
+        gaze:
+          type: object
+          properties:
+            direction:
+              type: array
+              items:
+                type: number
+              minItems: 2
+              maxItems: 2
+            pitch:
+              type: number
+            yaw:
+              type: number
+        action_units:
+          type: object
+          properties:
+            active:
+              type: array
+              items:
+                type: object
+                properties:
+                  label:
+                    type: string
+                  intensity:
+                    type: number
+                    minimum: 0
+                    maximum: 1
+            all_aus:
+              type: object
+              additionalProperties:
+                type: number
+                minimum: 0
+                maximum: 1
+
+    ClientInfo:
+      type: object
+      properties:
+        client_id:
+          type: string
+        start_time:
+          type: string
+          format: date-time
+        log_file:
+          type: string
+        connected:
+          type: boolean
+
+    Error:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        error:
+          type: string
+          description: Error message
+        timestamp:
+          type: number
+
+  # WebSocket Events (for documentation)
+  x-websocket-events:
+    connect:
+      description: Client connects to WebSocket
+      response:
+        $ref: '#/components/schemas/ConnectionResponse'
+    
+    disconnect:
+      description: Client disconnects from WebSocket
+    
+    analyze_frame:
+      description: Send frame for analysis
+      payload:
+        type: object
+        properties:
+          image:
+            type: string
+            description: Base64 encoded image data
+        required:
+          - image
+      response:
+        $ref: '#/components/schemas/AnalysisResult'
+    
+    ping:
+      description: Connection test
+      payload:
+        type: object
+      response:
+        type: object
+        properties:
+          timestamp:
+            type: number
+          data:
+            type: object
+    
+    get_client_info:
+      description: Request client information
+      payload:
+        type: object
+        properties:
+          client_id:
+            type: string
+      response:
+        type: object
+        properties:
+          success:
+            type: boolean
+          client_info:
+            $ref: '#/components/schemas/ClientInfo'
+
+    ConnectionResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        client_id:
+          type: string
+        message:
+          type: string
+        server_info:
+          type: object
+          properties:
+            api_version:
+              type: string
+            capabilities:
+              type: object
+              properties:
+                face_detection:
+                  type: boolean
+                emotion_analysis:
+                  type: boolean
+                gaze_estimation:
+                  type: boolean
+                action_units:
+                  type: boolean

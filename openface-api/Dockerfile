@@ -25,8 +25,14 @@ RUN apt-get update && apt-get install -y \
 COPY consolidated_requirements.txt ./
 RUN pip install --no-cache-dir -r consolidated_requirements.txt
 
-# Copy project files
-COPY . .
+# Copy shared project files
+COPY OpenFace-3.0 ./OpenFace-3.0
+COPY setup-info ./setup-info
+COPY .git ./.git
+COPY .gitmodules ./.gitmodules
+
+# Copy API-specific files
+COPY openface-api ./openface-api
 
 # Initialize git submodules (skip --recursive as requested)
 RUN git submodule update --init
@@ -37,14 +43,18 @@ RUN cp setup-info/.gitmodules OpenFace-3.0/.gitmodules
 # Update submodules in OpenFace-3.0 directory
 RUN cd OpenFace-3.0 && git submodule update --init
 
-# Install openface-test package
-RUN pip install --no-cache-dir openface-test
+# Create weights directory first
+RUN mkdir -p OpenFace-3.0/weights
 
-# Download OpenFace models and move them to the correct location
-RUN openface download --output aux && \
-    mkdir -p OpenFace-3.0/weights && \
-    cp -n aux/* OpenFace-3.0/weights/ 2>/dev/null || true && \
-    rm -rf aux
+# Create logs directory for API logging
+RUN mkdir -p openface-api/logs && chmod 755 openface-api/logs
+
+# Download OpenFace models with cache mount for persistent caching
+RUN --mount=type=cache,target=/cache/openface \
+    if [ ! -d "/cache/openface/weights" ]; then \
+        openface download --output /cache/openface/weights; \
+    fi && \
+    cp -r /cache/openface/weights/* OpenFace-3.0/weights/
 
 # Expose port for the API (assuming it runs on port 5000)
 EXPOSE 5000

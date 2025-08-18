@@ -195,8 +195,8 @@
             </div>
             <div class="setting-item">
                 <label>Frame Rate:</label>
-                <input type="range" id="frameRate" min="1" max="30" value="10" />
-                <span id="frameRateValue">10</span> FPS
+                <input type="range" id="frameRate" min="1" max="30" value="5" />
+                <span id="frameRateValue">5</span> FPS
             </div>
             <div class="setting-item">
                 <label>Video Quality:</label>
@@ -250,6 +250,8 @@
         let currentResults = null;
         let lastValidResults = null;  // Keep last valid analysis results
         let renderInterval = null;    // Separate rendering loop
+        let isProcessingFrame = false; // Track if backend is processing
+        let skippedFrames = 0;
         
         // Initialize when page loads
         document.addEventListener('DOMContentLoaded', function() {
@@ -406,9 +408,14 @@
         }
         
         function captureAndSendFrame() {
-            if (!video || !video.videoWidth || !socket || !socket.connected) {
+            if (!video || !video.videoWidth || !socket || !socket.connected || isProcessingFrame) {
+                if (isProcessingFrame) {
+                    skippedFrames++;
+                }
                 return;
             }
+            
+            isProcessingFrame = true;
             
             // Create a temporary canvas for capture
             const tempCanvas = document.createElement('canvas');
@@ -434,8 +441,10 @@
             const now = Date.now();
             if (now - lastTime >= 1000) {
                 const fps = frameCount / ((now - lastTime) / 1000);
-                document.getElementById('fpsCounter').textContent = `FPS: ${fps.toFixed(1)}`;
+                const skippedInfo = skippedFrames > 0 ? ` (${skippedFrames} skipped)` : '';
+                document.getElementById('fpsCounter').textContent = `FPS: ${fps.toFixed(1)}${skippedInfo}`;
                 frameCount = 0;
+                skippedFrames = 0;
                 lastTime = now;
             }
         }
@@ -456,6 +465,7 @@
         }
         
         function handleAnalysisResult(data) {
+            isProcessingFrame = false; // Frame processing completed
             currentResults = data;
             
             if (data.success && data.faces && data.faces.length > 0) {
