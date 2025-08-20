@@ -15,8 +15,8 @@ except ImportError:
     cv2 = None
     np = None
 
-from api_utils.validation import validate_file_upload
-from api_utils.image_utils import decode_base64_image
+from utils.validation import validate_file_upload
+from utils.image_utils import decode_base64_image
 
 analysis_bp = Blueprint('analysis', __name__)
 

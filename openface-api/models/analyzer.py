@@ -6,10 +6,19 @@ OpenFace facial analysis engine for API
 import os
 import sys
 import time
+from pathlib import Path
+
+# Use centralized path manager instead of manual path handling
+from utils.path_manager import path_manager
+
+print(f"📍 Using OpenFace-3.0 path: {path_manager.openface_path}")
+
+# Third-party imports
 import cv2
 import numpy as np
 from PIL import Image
 
+# Optional PyTorch imports
 try:
     import torch
     from torchvision import transforms
@@ -19,14 +28,57 @@ except ImportError:
     torch = None
     transforms = None
 
+# OpenFace specific imports (conditionally imported)
+try:
+    # Import RetinaFace components using wrapper
+    from .retinaface_wrapper import load_retinaface_components
+    RetinaFace, cfg_mnet, PriorBox, decode, decode_landm, py_cpu_nms = load_retinaface_components()
+    
+    if RetinaFace is not None:
+        RETINAFACE_AVAILABLE = True
+        print(f"✅ RetinaFace imports successful via wrapper")
+    else:
+        RETINAFACE_AVAILABLE = False
+        print(f"❌ RetinaFace wrapper failed to load components")
+        
+except Exception as e:
+    print(f"❌ RetinaFace imports failed: {e}")
+    print(f"Current working directory: {os.getcwd()}")
+    print(f"Python path: {sys.path[:3]}...")  # Show first 3 paths
+    RETINAFACE_AVAILABLE = False
+    RetinaFace = None
+    cfg_mnet = None
+    PriorBox = None
+    decode = None
+    decode_landm = None
+    py_cpu_nms = None
+
+try:
+    # Import MLT model using wrapper to handle relative imports
+    from .mlt_wrapper import load_mlt_model
+    MLT = load_mlt_model()
+    if MLT is not None:
+        MLT_AVAILABLE = True
+        print(f"✅ MLT import successful via wrapper")
+    else:
+        MLT_AVAILABLE = False
+        print(f"❌ MLT wrapper failed to load model")
+except Exception as e:
+    print(f"❌ MLT import failed: {e}")
+    import traceback
+    traceback.print_exc()
+    MLT_AVAILABLE = False
+    MLT = None
+
+# Local imports
 from config import config, api_config
 
 
 class OpenFaceAnalyzer:
-    """OpenFace facial analysis engine for API"""
+    """OpenFace facial analysis engine for API with lazy loading"""
     
     def __init__(self):
-        """Initialize the OpenFace analyzer"""
+        """Initialize the OpenFace analyzer with lazy loading"""
         if not TORCH_AVAILABLE:
             print("❌ PyTorch not available - analyzer will be limited")
             self.device = None
@@ -34,105 +86,136 @@ class OpenFaceAnalyzer:
             self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
             print(f"🚀 Using device: {self.device}")
         
-        # Initialize models
-        self.retinaface = None
-        self.mlt_model = None
-        self.face_cascade = None
+        # Initialize models as None for lazy loading
+        self._retinaface = None
+        self._mlt_model = None
+        self._face_cascade = None
+        self._retinaface_loaded = False
+        self._mlt_loaded = False
+        self._opencv_loaded = False
         
         # Labels from config
         self.emotion_labels = api_config.EMOTION_LABELS
         self.au_labels = api_config.AU_LABELS
         
-        # Image transform for MLT model
-        if TORCH_AVAILABLE:
-            self.transform = transforms.Compose([
-                transforms.Resize((224, 224)),
-                transforms.ToTensor(),
-                transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
-            ])
-        
-        # Load models
-        self._load_models()
+        # Image transform for MLT model (lazy loaded)
+        self._transform = None
         
         if TORCH_AVAILABLE:
             torch.set_grad_enabled(False)
         
-        print("✅ OpenFace analyzer initialized!")
+        print("✅ OpenFace analyzer initialized with lazy loading!")
     
-    def _load_models(self):
-        """Load OpenFace models"""
-        
-        # 1. Load RetinaFace for face detection
+    @property
+    def retinaface(self):
+        """Lazy load RetinaFace model"""
+        if not self._retinaface_loaded:
+            self._load_retinaface()
+            self._retinaface_loaded = True
+        return self._retinaface
+    
+    @property
+    def mlt_model(self):
+        """Lazy load MLT model"""
+        if not self._mlt_loaded:
+            self._load_mlt_model()
+            self._mlt_loaded = True
+        return self._mlt_model
+    
+    @property
+    def face_cascade(self):
+        """Lazy load OpenCV face cascade"""
+        if not self._opencv_loaded:
+            self._load_opencv_cascade()
+            self._opencv_loaded = True
+        return self._face_cascade
+    
+    @property
+    def transform(self):
+        """Lazy load image transforms"""
+        if self._transform is None and TORCH_AVAILABLE:
+            self._transform = transforms.Compose([
+                transforms.Resize((224, 224)),
+                transforms.ToTensor(),
+                transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+            ])
+        return self._transform
+    
+    def _load_retinaface(self):
+        """Load RetinaFace model"""
         try:
-            if not TORCH_AVAILABLE:
-                raise ImportError("PyTorch not available")
-                
-            from models.retinaface import RetinaFace
-            from data import cfg_mnet
+            if not TORCH_AVAILABLE or not RETINAFACE_AVAILABLE:
+                print("⚠️  PyTorch or RetinaFace not available")
+                return
             
             print("📦 Loading RetinaFace...")
             self.cfg = cfg_mnet.copy()
             self.cfg['pretrain'] = False
-            self.retinaface = RetinaFace(cfg=self.cfg, phase='test')
+            self._retinaface = RetinaFace(cfg=self.cfg, phase='test')
             
-            retinaface_weights = config.weights_dir / "mobilenet0.25_Final.pth"
-            if retinaface_weights.exists():
-                checkpoint = torch.load(retinaface_weights, map_location=self.device)
-                self.retinaface.load_state_dict(checkpoint, strict=False)
-                self.retinaface.eval()
-                self.retinaface = self.retinaface.to(self.device)
-                print(f"✅ RetinaFace loaded from: {retinaface_weights}")
+            if path_manager.weights_dir:
+                retinaface_weights = path_manager.weights_dir / "mobilenet0.25_Final.pth"
+                if retinaface_weights.exists():
+                    checkpoint = torch.load(retinaface_weights, map_location=self.device)
+                    self._retinaface.load_state_dict(checkpoint, strict=False)
+                    self._retinaface.eval()
+                    self._retinaface = self._retinaface.to(self.device)
+                    print(f"✅ RetinaFace loaded from: {retinaface_weights}")
+                else:
+                    print(f"⚠️  RetinaFace weights not found: {retinaface_weights}")
+                    self._retinaface = None
             else:
-                print(f"⚠️  RetinaFace weights not found: {retinaface_weights}")
-                self.retinaface = None
+                print("⚠️  Weights directory not available")
+                self._retinaface = None
                 
         except Exception as e:
             print(f"❌ Failed to load RetinaFace: {e}")
-            self.retinaface = None
-        
-        # Fallback to OpenCV face detection
-        if self.retinaface is None:
-            try:
-                self.face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
-                print("✅ Using OpenCV face detection as fallback")
-            except Exception as e:
-                print(f"❌ OpenCV face detection failed: {e}")
-        
-        # 2. Load MLT model for emotion, AU, and gaze analysis
+            self._retinaface = None
+    
+    def _load_mlt_model(self):
+        """Load MLT model"""
         try:
-            if not TORCH_AVAILABLE:
-                raise ImportError("PyTorch not available")
-                
-            from model.MLT import MLT
+            if not TORCH_AVAILABLE or not MLT_AVAILABLE:
+                print("⚠️  PyTorch or MLT not available")
+                return
             
             print("📦 Loading MLT model...")
-            self.mlt_model = MLT(expr_classes=8, au_numbers=8)
+            self._mlt_model = MLT(expr_classes=8, au_numbers=8)
             
-            mlt_weights = config.weights_dir / "MTL_backbone.pth"
-            if mlt_weights.exists():
-                checkpoint = torch.load(mlt_weights, map_location=self.device)
-                self.mlt_model.load_state_dict(checkpoint, strict=False)
-                self.mlt_model.eval()
-                self.mlt_model = self.mlt_model.to(self.device)
-                print(f"✅ MLT model loaded from: {mlt_weights}")
+            if path_manager.weights_dir:
+                mlt_weights = path_manager.weights_dir / "MTL_backbone.pth"
+                if mlt_weights.exists():
+                    checkpoint = torch.load(mlt_weights, map_location=self.device)
+                    self._mlt_model.load_state_dict(checkpoint, strict=False)
+                    self._mlt_model.eval()
+                    self._mlt_model = self._mlt_model.to(self.device)
+                    print(f"✅ MLT model loaded from: {mlt_weights}")
+                else:
+                    print(f"⚠️  MLT weights not found: {mlt_weights}")
+                    self._mlt_model = None
             else:
-                print(f"⚠️  MLT weights not found: {mlt_weights}")
-                self.mlt_model = None
+                print("⚠️  Weights directory not available")
+                self._mlt_model = None
                 
         except Exception as e:
             print(f"❌ Failed to load MLT model: {e}")
-            self.mlt_model = None
+            self._mlt_model = None
+    
+    def _load_opencv_cascade(self):
+        """Load OpenCV face cascade as fallback"""
+        try:
+            self._face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
+            print("✅ OpenCV face detection loaded as fallback")
+        except Exception as e:
+            print(f"❌ OpenCV face detection failed: {e}")
+            self._face_cascade = None
     
     def detect_faces_retinaface(self, img):
         """Detect faces using RetinaFace"""
-        if self.retinaface is None or not TORCH_AVAILABLE:
+        if self.retinaface is None or not TORCH_AVAILABLE or not RETINAFACE_AVAILABLE:
             return np.array([])
         
         try:
-            from layers.functions.prior_box import PriorBox
-            from utils.box_utils import decode, decode_landm
-            from utils.nms.py_cpu_nms import py_cpu_nms
-            
             img_tensor = np.float32(img.copy())
             im_height, im_width, _ = img_tensor.shape
             scale = torch.Tensor([img_tensor.shape[1], img_tensor.shape[0], 
@@ -356,3 +439,10 @@ class OpenFaceAnalyzer:
                 "error": str(e),
                 "timestamp": time.time()
             }
+
+
+if __name__ == "__main__":
+    # This only runs when the file is executed directly, not when imported
+    print("Testing OpenFace Analyzer...")
+    analyzer = OpenFaceAnalyzer()
+    print("✅ Analyzer initialized successfully!")

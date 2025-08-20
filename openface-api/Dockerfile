@@ -59,5 +59,11 @@ RUN --mount=type=cache,target=/cache/openface \
 # Expose port for the API (assuming it runs on port 5000)
 EXPOSE 5000
 
+# Set Python path for RetinaFace imports
+ENV PYTHONPATH="/app/OpenFace-3.0/Pytorch_Retinaface:/app/OpenFace-3.0/Pytorch_Retinaface/models:/app/OpenFace-3.0/Pytorch_Retinaface/layers:/app/OpenFace-3.0/Pytorch_Retinaface/utils"
+
+# Change working directory to the API folder
+WORKDIR /app/openface-api
+
 # Set default command (can be overridden)
-CMD ["python", "openface-api/app.py"]
+CMD ["python", "app.py"]

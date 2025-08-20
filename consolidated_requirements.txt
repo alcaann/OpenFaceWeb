@@ -23,20 +23,22 @@ huggingface_hub
 tqdm
 tensorboardX
 
-# Web framework
-flask
-flask-socketio
-python-socketio[client]
-python-engineio
-eventlet
-gevent
-python-dotenv
+# Web framework (pinned for compatibility)
+flask==3.0.3
+# Use Flask-SocketIO 5.x (Engine.IO v4) matching modern JS client 4.x
+flask-socketio==5.3.6
+python-socketio[client]==5.11.2
+python-engineio==4.9.0
+websocket-client==1.8.0
+python-dotenv==1.0.1
+# NOTE: Removed eventlet/gevent to simplify to threading mode; can re-add if async scalability needed
 
 # Utilities
 click
 requests
 PyWavelets
 psutil
+eventlet>=0.33.0
 
 # OpenFace package
 openface-test

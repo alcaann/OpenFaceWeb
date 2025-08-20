@@ -1,68 +1,44 @@
 openapi: 3.0.3
 info:
-  title: OpenFace-3.0 API
+  title: OpenFace-3.0 Real-Time API
   description: |
-    Real-time facial analysis API using WebSockets that integrates with the OpenFace-3.0 models.
-    
-    ## Features
-    - **Real-time Analysis**: WebSocket-based API for live video stream processing
-    - **Face Detection**: RetinaFace (primary) with OpenCV fallback
-    - **Facial Analysis**: 
-      - Emotion recognition (8 emotions)
-      - Action Units detection (20 AUs)
-      - Gaze estimation (pitch/yaw)
-      - Facial landmarks (5 key points)
-    - **Web Interface**: HTML test client with live video feed
-    - **Cross-platform**: Works on Windows, Linux, and macOS
-    
-    ## Getting Started
-    1. Start the server: `python app.py`
-    2. Open `test_client.html` in a web browser
-    3. Connect to WebSocket and start analysis
-    
-  version: 3.0.0
+    A streamlined, real-time facial analysis API using WebSockets, powered by OpenFace-3.0. 
+    This service is designed for high-performance, low-latency analysis of video streams.
+
+    **Primary Interaction:**
+    The main way to use this API is via a WebSocket connection. Once connected, a client can stream video frames (as base64-encoded strings) and will receive JSON analysis data in real-time.
+
+    **HTTP Endpoints:**
+    A few essential HTTP endpoints are provided for health checks and single-image analysis.
+  version: 3.1.0
   contact:
-    name: OpenFace API Support
+    name: API Support
+    url: https://github.com/alcaann/OpenFaceWeb
   license:
     name: MIT
+
 servers:
   - url: http://localhost:5000
-    description: Development server
-  - url: http://0.0.0.0:5000
-    description: Local server (all interfaces)
+    description: Local development server
 
 paths:
-  /:
-    get:
-      summary: API Information
-      description: Get API status and system information
-      responses:
-        '200':
-          description: API information
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/SystemInfo'
-        '500':
-          description: Server error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-
   /health:
     get:
       summary: Health Check
-      description: Check API health and system status
+      description: |
+        Performs a health check of the API, verifying that the core components and models are loaded and available.
+        Returns a status of "healthy" if the service is operational.
+      tags:
+        - General
       responses:
         '200':
-          description: Health status
+          description: API is healthy and operational.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/HealthStatus'
-        '500':
-          description: Unhealthy
+        '503':
+          description: Service is unavailable or unhealthy.
           content:
             application/json:
               schema:
@@ -70,8 +46,11 @@ paths:
 
   /api/analyze:
     post:
-      summary: Analyze Image
-      description: Upload an image for facial analysis
+      summary: Analyze a Single Image
+      description: |
+        Upload a single image file for facial analysis. This endpoint is useful for testing or for applications that process static images rather than video streams.
+      tags:
+        - Analysis
       requestBody:
         required: true
         content:
@@ -82,200 +61,92 @@ paths:
                 image:
                   type: string
                   format: binary
-                  description: Image file to analyze
-              required:
-                - image
+                  description: The image file to be analyzed.
       responses:
         '200':
-          description: Analysis results
+          description: Successful analysis of the image.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/AnalysisResult'
         '400':
-          description: Invalid input
+          description: Bad request, such as a missing or invalid image file.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
         '500':
-          description: Analysis failed
+          description: An internal error occurred during analysis.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
 
-  /api/logs:
-    get:
-      summary: Get API Logs
-      description: Retrieve recent API logs
-      responses:
-        '200':
-          description: Log entries
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  success:
-                    type: boolean
-                  logs:
-                    type: array
-                    items:
-                      type: object
-                  total:
-                    type: integer
-
-  /api/logs/files:
-    get:
-      summary: Get Log Files
-      description: List available log files
-      responses:
-        '200':
-          description: Log file list
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  success:
-                    type: boolean
-                  files:
-                    type: array
-                    items:
-                      type: object
-                      properties:
-                        name:
-                          type: string
-                        size_mb:
-                          type: number
-                        modified:
-                          type: number
-
-  /api/logs/clients:
-    get:
-      summary: Get Active Clients
-      description: List active WebSocket clients
-      responses:
-        '200':
-          description: Active client list
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  success:
-                    type: boolean
-                  clients:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/ClientInfo'
-                  total:
-                    type: integer
-
-  /api/logs/client/{clientId}:
-    get:
-      summary: Get Client Logs
-      description: Get logs for a specific WebSocket client
-      parameters:
-        - name: clientId
-          in: path
-          required: true
-          schema:
-            type: string
-      responses:
-        '200':
-          description: Client logs
-        '404':
-          description: Client not found
+# WebSocket Documentation (using x-asyncapi extension)
+x-asyncapi:
+  channels:
+    /:
+      subscribe:
+        summary: Receive analysis results and system events.
+        message:
+          oneOf:
+            - $ref: '#/components/messages/AnalysisResult'
+            - $ref: '#/components/messages/ConnectionSuccess'
+            - $ref: '#/components/messages/Error'
+      publish:
+        summary: Send frames for analysis.
+        message:
+          $ref: '#/components/messages/AnalyzeFrame'
 
 components:
-  schemas:
-    SystemInfo:
-      type: object
-      properties:
-        service:
-          type: string
-          example: "OpenFace-3.0 Flask API"
-        version:
-          type: string
-          example: "3.0"
-        status:
-          type: string
-          example: "running"
-        endpoints:
-          type: object
-        system:
-          type: object
-          properties:
-            python_version:
-              type: string
-            cpu_count:
-              type: integer
-            memory_total_gb:
-              type: number
-            memory_available_gb:
-              type: number
-        openface:
-          type: object
-          properties:
-            project_path:
-              type: string
-            weights_path:
-              type: string
-            model_available:
-              type: boolean
-        gpu:
-          type: object
-          properties:
-            available:
-              type: boolean
-            device_count:
-              type: integer
-            device_name:
-              type: string
+  messages:
+    ConnectionSuccess:
+      payload:
+        type: object
+        properties:
+          success:
+            type: boolean
+            example: true
+          client_id:
+            type: string
+            description: A unique ID for the WebSocket session.
+            example: "a1b2c3d4"
+          message:
+            type: string
+            example: "Connection successful."
+    AnalyzeFrame:
+      payload:
+        type: object
+        required:
+          - image
+        properties:
+          image:
+            type: string
+            format: byte
+            description: A base64-encoded string of the video frame.
+    AnalysisResult:
+      $ref: '#/components/schemas/AnalysisResult'
+    Error:
+      $ref: '#/components/schemas/Error'
 
+  schemas:
     HealthStatus:
       type: object
       properties:
         status:
           type: string
-          enum: [healthy, unhealthy]
+          enum: [healthy]
         timestamp:
-          type: number
-        cpu_percent:
-          type: number
-        memory_percent:
-          type: number
-        models:
+          type: string
+          format: date-time
+        models_loaded:
           type: object
           properties:
             retinaface:
-              $ref: '#/components/schemas/ModelStatus'
+              type: boolean
             mlt:
-              $ref: '#/components/schemas/ModelStatus'
-            star:
-              $ref: '#/components/schemas/ModelStatus'
-        analyzer:
-          type: object
-          properties:
-            initialized:
               type: boolean
-            torch_available:
-              type: boolean
-            cuda_available:
-              type: boolean
-
-    ModelStatus:
-      type: object
-      properties:
-        available:
-          type: boolean
-        path:
-          type: string
-        size_mb:
-          type: number
-
+    
     AnalysisResult:
       type: object
       properties:
@@ -285,28 +156,12 @@ components:
           type: number
         processing_time_ms:
           type: number
-        frame_info:
-          type: object
-          properties:
-            width:
-              type: integer
-            height:
-              type: integer
         faces_detected:
           type: integer
         faces:
           type: array
           items:
             $ref: '#/components/schemas/FaceAnalysis'
-        system_info:
-          type: object
-          properties:
-            device:
-              type: string
-            face_detector:
-              type: string
-            analysis_model:
-              type: string
 
     FaceAnalysis:
       type: object
@@ -317,51 +172,33 @@ components:
           type: array
           items:
             type: integer
-          minItems: 4
-          maxItems: 4
-          description: "[x1, y1, x2, y2]"
+          example: [100, 120, 250, 270]
         confidence:
           type: number
-          minimum: 0
-          maximum: 1
+          format: float
         landmarks:
           type: array
           items:
             type: array
             items:
               type: integer
-            minItems: 2
-            maxItems: 2
-          description: "Array of [x, y] landmark points"
         emotion:
           type: object
           properties:
             label:
               type: string
-              enum: [Neutral, Happy, Sad, Surprise, Fear, Disgust, Anger, Contempt]
             confidence:
               type: number
-              minimum: 0
-              maximum: 1
-            all_emotions:
-              type: object
-              additionalProperties:
-                type: number
-                minimum: 0
-                maximum: 1
+              format: float
         gaze:
           type: object
           properties:
-            direction:
-              type: array
-              items:
-                type: number
-              minItems: 2
-              maxItems: 2
             pitch:
               type: number
+              format: float
             yaw:
               type: number
+              format: float
         action_units:
           type: object
           properties:
@@ -374,27 +211,7 @@ components:
                     type: string
                   intensity:
                     type: number
-                    minimum: 0
-                    maximum: 1
-            all_aus:
-              type: object
-              additionalProperties:
-                type: number
-                minimum: 0
-                maximum: 1
-
-    ClientInfo:
-      type: object
-      properties:
-        client_id:
-          type: string
-        start_time:
-          type: string
-          format: date-time
-        log_file:
-          type: string
-        connected:
-          type: boolean
+                    format: float
 
     Error:
       type: object
@@ -404,82 +221,5 @@ components:
           example: false
         error:
           type: string
-          description: Error message
-        timestamp:
-          type: number
+          description: A description of the error.
 
-  # WebSocket Events (for documentation)
-  x-websocket-events:
-    connect:
-      description: Client connects to WebSocket
-      response:
-        $ref: '#/components/schemas/ConnectionResponse'
-    
-    disconnect:
-      description: Client disconnects from WebSocket
-    
-    analyze_frame:
-      description: Send frame for analysis
-      payload:
-        type: object
-        properties:
-          image:
-            type: string
-            description: Base64 encoded image data
-        required:
-          - image
-      response:
-        $ref: '#/components/schemas/AnalysisResult'
-    
-    ping:
-      description: Connection test
-      payload:
-        type: object
-      response:
-        type: object
-        properties:
-          timestamp:
-            type: number
-          data:
-            type: object
-    
-    get_client_info:
-      description: Request client information
-      payload:
-        type: object
-        properties:
-          client_id:
-            type: string
-      response:
-        type: object
-        properties:
-          success:
-            type: boolean
-          client_info:
-            $ref: '#/components/schemas/ClientInfo'
-
-    ConnectionResponse:
-      type: object
-      properties:
-        success:
-          type: boolean
-        client_id:
-          type: string
-        message:
-          type: string
-        server_info:
-          type: object
-          properties:
-            api_version:
-              type: string
-            capabilities:
-              type: object
-              properties:
-                face_detection:
-                  type: boolean
-                emotion_analysis:
-                  type: boolean
-                gaze_estimation:
-                  type: boolean
-                action_units:
-                  type: boolean

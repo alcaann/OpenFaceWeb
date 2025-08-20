@@ -9,6 +9,9 @@ import sys
 from pathlib import Path
 from contextlib import contextmanager
 
+# Import centralized path manager
+from utils.path_manager import path_manager
+
 @contextmanager
 def project_directory_context(project_path):
     """Context manager for temporarily changing to project directory"""
@@ -24,73 +27,38 @@ class OpenFaceAPIConfig:
     
     def __init__(self, openface_project_path=None):
         """
-        Initialize configuration
+        Initialize configuration - now uses centralized path manager
         
         Args:
             openface_project_path: Path to OpenFace-3.0 project directory
-                                 If None, attempts to auto-detect
+                                 If None, uses path manager discovery
         """
-        self.api_dir = Path(__file__).parent.absolute()
-        self.project_root = self._find_openface_project(openface_project_path)
+        # Use centralized path manager
+        self.api_dir = path_manager.api_dir
+        self.project_root = path_manager.openface_path
         
-        # Setup paths
-        self.model_dir = self.project_root / "model"
-        self.retinaface_dir = self.project_root / "Pytorch_Retinaface"
-        self.star_dir = self.project_root / "STAR"
-        self.weights_dir = self._setup_weights_dir()
+        # Setup paths using path manager
+        self.model_dir = path_manager.model_dir
+        self.retinaface_dir = path_manager.retinaface_dir
+        self.weights_dir = path_manager.weights_dir
         
-        # Add to Python path
-        self._setup_python_paths()
+        # Validate setup
+        if self.project_root is None:
+            print("❌ OpenFace-3.0 not found - some features will be unavailable")
+        else:
+            self._validate_setup()
     
-    def _find_openface_project(self, provided_path):
-        """Find OpenFace-3.0 project directory"""
-        if provided_path:
-            project_path = Path(provided_path)
-            if project_path.exists() and (project_path / "model").exists():
-                return project_path.absolute()
-        
-        # Check common locations
-        search_paths = [
-            self.api_dir.parent / "OpenFace-3.0",  # Sibling directory
-            self.api_dir / "OpenFace-3.0",          # Inside API directory
-            Path.cwd() / "OpenFace-3.0",            # Current working directory
-            Path.home() / "OpenFace-3.0",           # Home directory
-        ]
-        
-        for path in search_paths:
-            if path.exists() and (path / "model").exists():
-                print(f"✅ Found OpenFace-3.0 at: {path}")
-                return path.absolute()
-        
-        # If not found, use the expected path
-        expected_path = self.api_dir.parent / "OpenFace-3.0"
-        print(f"⚠️  OpenFace-3.0 not found, using expected path: {expected_path}")
-        return expected_path.absolute()
-    
-    def _setup_weights_dir(self):
-        """Setup weights directory"""
-        weights_dir = self.project_root / "weights"
-        if not weights_dir.exists():
-            print(f"⚠️  Weights directory not found: {weights_dir}")
+    def _validate_setup(self):
+        """Validate OpenFace setup using path manager"""
+        if not self.weights_dir or not self.weights_dir.exists():
+            print(f"⚠️  Weights directory not found: {self.weights_dir}")
             print("Create it and download the model weights:")
             print("https://drive.google.com/drive/folders/1aBEol-zG_blHSavKFVBH9dzc9U9eJ92p")
-        return weights_dir
-    
-    def _setup_python_paths(self):
-        """Add necessary paths to Python path"""
-        paths_to_add = [
-            str(self.project_root),
-            str(self.retinaface_dir),
-            str(self.model_dir),
-            str(self.star_dir)
-        ]
-        
-        for path in paths_to_add:
-            if path not in sys.path:
-                sys.path.insert(0, path)
     
     def get_model_paths(self):
         """Get paths to model files"""
+        if not self.weights_dir:
+            return {}
         return {
             'retinaface': self.weights_dir / "mobilenet0.25_Final.pth",
             'mlt': self.weights_dir / "MTL_backbone.pth",
@@ -153,7 +121,7 @@ class APIConfig:
     """API-specific configuration constants"""
     HOST = os.getenv('API_HOST', '0.0.0.0')
     PORT = int(os.getenv('API_PORT', 5000))
-    DEBUG = os.getenv('FLASK_ENV', 'development') == 'development'
+    DEBUG = True  # Force debug mode to see all requests
     
     # Detection thresholds
     CONFIDENCE_THRESHOLD = float(os.getenv('CONFIDENCE_THRESHOLD', 0.5))

@@ -8,6 +8,9 @@ import sys
 import subprocess
 from pathlib import Path
 
+# Use centralized path manager
+from utils.path_manager import path_manager
+
 try:
     import torch
 except ImportError:
@@ -20,23 +23,21 @@ def check_startup_requirements():
     print("🔍 OpenFace API Startup Validation")
     print("="*60)
     
-    from config import config
-    
-    # Check OpenFace directory
-    if config.project_root.exists():
-        print(f"✅ OpenFace-3.0 directory: {config.project_root}")
+    # Check OpenFace directory using path manager
+    if path_manager.openface_path and path_manager.openface_path.exists():
+        print(f"✅ OpenFace-3.0 directory: {path_manager.openface_path}")
     else:
-        print(f"❌ OpenFace-3.0 directory missing: {config.project_root}")
+        print(f"❌ OpenFace-3.0 directory missing: {path_manager.openface_path}")
     
     # Check weights directory
-    if config.weights_dir.exists():
-        print(f"✅ Weights directory: {config.weights_dir}")
+    if path_manager.weights_dir and path_manager.weights_dir.exists():
+        print(f"✅ Weights directory: {path_manager.weights_dir}")
         
-        # Check model files
+        # Check model files without loading them
         models = {
-            "RetinaFace": config.weights_dir / "mobilenet0.25_Final.pth",
-            "MLT Backbone": config.weights_dir / "MTL_backbone.pth",
-            "STAR Landmark": config.weights_dir / "Landmark_68.pkl"
+            "RetinaFace": path_manager.weights_dir / "mobilenet0.25_Final.pth",
+            "MLT Backbone": path_manager.weights_dir / "MTL_backbone.pth",
+            "STAR Landmark": path_manager.weights_dir / "Landmark_68.pkl"
         }
         
         for name, path in models.items():
@@ -46,7 +47,50 @@ def check_startup_requirements():
             else:
                 print(f"⚠️  {name}: {path.name} (missing)")
     else:
-        print(f"❌ Weights directory missing: {config.weights_dir}")
+        print(f"❌ Weights directory missing: {path_manager.weights_dir}")
+    
+    # Check logs directory
+    logs_dir = Path(__file__).parent.parent / "logs"
+    if logs_dir.exists():
+        print(f"✅ Logs directory exists: {logs_dir}")
+        # Test write permissions
+        try:
+            test_file = logs_dir / ".write_test"
+            test_file.touch()
+            test_file.unlink()
+            print(f"✅ Logs directory is writable")
+        except Exception as e:
+            print(f"❌ Logs directory not writable: {e}")
+    else:
+        print(f"⚠️  Logs directory missing: {logs_dir}")
+        try:
+            logs_dir.mkdir(exist_ok=True)
+            print(f"✅ Created logs directory: {logs_dir}")
+        except Exception as e:
+            print(f"❌ Failed to create logs directory: {e}")
+    
+    # Check CUDA availability without loading models
+    if torch is not None:
+        if torch.cuda.is_available():
+            cuda_version = torch.version.cuda
+            device_count = torch.cuda.device_count()
+            current_device = torch.cuda.current_device()
+            device_name = torch.cuda.get_device_name(current_device)
+            memory = torch.cuda.get_device_properties(current_device).total_memory / (1024**3)
+            
+            print(f"✅ CUDA available: {cuda_version}")
+            print(f"   GPU devices: {device_count}")
+            print(f"   Current device: {current_device} ({device_name})")
+            print(f"   Memory: {memory:.1f} GB")
+        else:
+            print(f"⚠️  CUDA not available - using CPU")
+    else:
+        print(f"❌ PyTorch not available")
+    
+    print("="*60)
+    print("🚀 Starting OpenFace API...")
+    print("="*60)
+    print()
     
     # Check logs directory
     logs_dir = Path(__file__).parent.parent / "logs"

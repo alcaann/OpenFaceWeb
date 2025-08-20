@@ -45,7 +45,6 @@ def install_packages_individually():
         "numpy>=1.24.0,<2.0.0",
         "pillow>=10.0.0",
         "python-dotenv>=1.0.0",
-        "eventlet>=0.33.0",
         "python-engineio>=4.7.0"
     ]
     
@@ -127,7 +126,6 @@ torch
 torchvision
 pillow
 python-dotenv
-eventlet
 python-engineio
 """
     

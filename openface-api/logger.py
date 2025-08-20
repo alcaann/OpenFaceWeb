@@ -7,12 +7,18 @@ Handles client-specific logging and real-time log streaming
 import os
 import json
 import time
+import threading
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Any
 from dataclasses import dataclass, asdict
 from threading import Lock
 import logging
+
+# --- Constants ---
+LOG_VERSION = "1.1"
+MAX_BUFFER_SIZE = 200
+SERVER_LOG_ID = "server"
 
 @dataclass
 class LogEntry:
@@ -22,247 +28,175 @@ class LogEntry:
     message: str
     client_id: Optional[str] = None
     event_type: Optional[str] = None
-    data: Optional[Dict] = None
+    data: Optional[Dict[str, Any]] = None
     
-    def to_dict(self):
+    def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
     
-    def to_json(self):
+    def to_json(self) -> str:
         return json.dumps(self.to_dict(), default=str)
 
-class ClientLogger:
-    """Individual client logger that writes to file"""
+class FileLogger:
+    """Handles writing logs to a single file, used for both server and clients."""
     
-    def __init__(self, client_id: str, logs_dir: Path):
-        self.client_id = client_id
+    def __init__(self, log_id: str, logs_dir: Path, session_info: Dict[str, Any]):
+        self.log_id = log_id
         self.start_time = datetime.now()
-        self.logs_dir = logs_dir
-        self.logs_dir.mkdir(exist_ok=True)
-        
-        # Create filename with timestamp and client ID
-        timestamp_str = self.start_time.strftime("%Y%m%d_%H%M%S")
-        self.log_file = self.logs_dir / f"{timestamp_str}_{client_id}.log"
-        
-        # Initialize log file
+        self.log_file = logs_dir / f"{self.start_time.strftime('%Y%m%d_%H%M%S')}_{log_id}.log"
         self.file_lock = Lock()
-        self._write_header()
-    
-    def _write_header(self):
+        self._write_header(session_info)
+
+    def _write_header(self, session_info: Dict[str, Any]):
         """Write session header to log file"""
         header = {
             "session_start": self.start_time.isoformat(),
-            "client_id": self.client_id,
-            "log_version": "1.0"
+            "log_id": self.log_id,
+            "log_version": LOG_VERSION,
+            **session_info
         }
-        
         with self.file_lock:
             with open(self.log_file, 'w') as f:
-                f.write(f"=== OpenFace API Session Log ===\n")
+                f.write("=== OpenFace API Session Log ===\n")
                 f.write(f"Session Info: {json.dumps(header, indent=2)}\n")
                 f.write(f"{'='*50}\n\n")
-    
-    def log(self, level: str, message: str, event_type: Optional[str] = None, data: Optional[Dict] = None):
-        """Write log entry to file"""
-        entry = LogEntry(
-            timestamp=time.time(),
-            level=level,
-            message=message,
-            client_id=self.client_id,
-            event_type=event_type,
-            data=data
-        )
-        
+
+    def write(self, entry: LogEntry):
+        """Write a single log entry to the file."""
         with self.file_lock:
             with open(self.log_file, 'a') as f:
-                timestamp_str = datetime.fromtimestamp(entry.timestamp).strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
-                f.write(f"[{timestamp_str}] [{level}] {message}")
-                if event_type:
-                    f.write(f" | Event: {event_type}")
-                if data:
-                    f.write(f" | Data: {json.dumps(data, default=str)}")
+                ts_str = datetime.fromtimestamp(entry.timestamp).strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+                f.write(f"[{ts_str}] [{entry.level}] {entry.message}")
+                if entry.event_type:
+                    f.write(f" | Event: {entry.event_type}")
+                if entry.data:
+                    f.write(f" | Data: {json.dumps(entry.data, default=str)}")
                 f.write("\n")
-        
-        return entry
-    
+
     def close(self):
-        """Close log file with session summary"""
+        """Close log file with a session summary."""
         end_time = datetime.now()
-        duration = end_time - self.start_time
-        
         summary = {
             "session_end": end_time.isoformat(),
-            "duration_seconds": duration.total_seconds(),
-            "client_id": self.client_id
+            "duration_seconds": (end_time - self.start_time).total_seconds()
         }
-        
         with self.file_lock:
             with open(self.log_file, 'a') as f:
                 f.write(f"\n{'='*50}\n")
                 f.write(f"Session Summary: {json.dumps(summary, indent=2)}\n")
-                f.write(f"=== Session Ended ===\n")
+                f.write("=== Session Ended ===\n")
 
 class RealTimeLogger:
-    """Main logging system with real-time streaming capabilities"""
+    """Main logging system with real-time streaming and dedicated file loggers."""
     
     def __init__(self, logs_dir: str = "logs"):
         self.logs_dir = Path(logs_dir)
         self.logs_dir.mkdir(exist_ok=True)
         
-        # Client loggers
-        self.client_loggers: Dict[str, ClientLogger] = {}
+        self.client_loggers: Dict[str, FileLogger] = {}
         self.client_lock = Lock()
         
-        # Real-time log buffer for WebSocket streaming
         self.log_buffer: List[LogEntry] = []
         self.buffer_lock = Lock()
-        self.max_buffer_size = 100
         
-        # SocketIO instance (will be set by app)
         self.socketio = None
         
-        # Setup Python logging integration
-        self._setup_python_logging()
+        # Create a dedicated logger for server-wide events
+        self.server_logger = FileLogger(SERVER_LOG_ID, self.logs_dir, {"log_type": "server"})
         
+        self._setup_python_logging()
         print(f"📋 RealTimeLogger initialized - logs directory: {self.logs_dir}")
-    
+        self.log("INFO", "Logging system initialized.", event_type="system_startup")
+
     def _setup_python_logging(self):
-        """Setup Python logging to capture all log messages"""
+        """Redirects standard Python logging to our system."""
         class SocketIOHandler(logging.Handler):
             def __init__(self, logger_instance):
                 super().__init__()
                 self.logger_instance = logger_instance
             
             def emit(self, record):
-                if hasattr(record, 'client_id'):
-                    client_id = record.client_id
-                else:
-                    client_id = None
-                
-                self.logger_instance.log(
-                    level=record.levelname,
-                    message=record.getMessage(),
-                    client_id=client_id,
-                    event_type="python_log"
-                )
+                if 'socketio' in record.name or 'engineio' in record.name:
+                    return
+                client_id = getattr(record, 'client_id', None)
+                self.logger_instance.log(record.levelname, record.getMessage(), client_id=client_id)
         
-        # Add our handler to root logger
-        handler = SocketIOHandler(self)
-        handler.setLevel(logging.INFO)
-        logging.getLogger().addHandler(handler)
-    
+        logging.basicConfig(level=logging.INFO, handlers=[SocketIOHandler(self)])
+
     def set_socketio(self, socketio):
-        """Set the SocketIO instance for real-time streaming"""
         self.socketio = socketio
-    
-    def register_client(self, client_id: str) -> ClientLogger:
-        """Register a new client and create their logger"""
+        self.log("INFO", "SocketIO instance set for real-time log streaming.", event_type="system_config")
+
+    def register_client(self, client_id: str):
         with self.client_lock:
             if client_id in self.client_loggers:
-                self.log("WARNING", f"Client {client_id} already registered", client_id=client_id)
-                return self.client_loggers[client_id]
+                self.log("WARNING", f"Client {client_id} already registered.", client_id=client_id)
+                return
             
-            client_logger = ClientLogger(client_id, self.logs_dir)
+            client_logger = FileLogger(client_id, self.logs_dir, {"log_type": "client"})
             self.client_loggers[client_id] = client_logger
-            
-            self.log("INFO", f"Client registered: {client_id}", client_id=client_id, event_type="client_connect")
-            return client_logger
-    
+            self.log("INFO", f"Client connected and logger registered.", client_id=client_id, event_type="client_connect")
+
     def unregister_client(self, client_id: str):
-        """Unregister client and close their log file"""
         with self.client_lock:
             if client_id in self.client_loggers:
-                client_logger = self.client_loggers[client_id]
-                client_logger.close()
-                del self.client_loggers[client_id]
+                # Log disconnection to the client's file before closing
+                self.log("INFO", "Client disconnected.", client_id=client_id, event_type="client_disconnect")
                 
-                self.log("INFO", f"Client unregistered: {client_id}", client_id=client_id, event_type="client_disconnect")
+                client_logger = self.client_loggers.pop(client_id)
+                client_logger.close()
+                
+                # Log to server log that client was unregistered
+                self.log("INFO", f"Client logger for {client_id} closed.", event_type="client_unregister")
             else:
-                self.log("WARNING", f"Attempted to unregister unknown client: {client_id}")
-    
+                self.log("WARNING", f"Attempted to unregister unknown client: {client_id}.")
+
     def log(self, level: str, message: str, client_id: Optional[str] = None, 
-            event_type: Optional[str] = None, data: Optional[Dict] = None):
-        """Main logging method"""
-        # Create log entry
-        entry = LogEntry(
-            timestamp=time.time(),
-            level=level,
-            message=message,
-            client_id=client_id,
-            event_type=event_type,
-            data=data
-        )
+            event_type: Optional[str] = None, data: Optional[Dict[str, Any]] = None):
+        entry = LogEntry(time.time(), level.upper(), message, client_id, event_type, data)
         
-        # Add to buffer for real-time streaming
+        # Write to the correct log file
+        if client_id and client_id in self.client_loggers:
+            self.client_loggers[client_id].write(entry)
+        else:
+            # All non-client logs go to the server log
+            self.server_logger.write(entry)
+        
+        # Add to buffer for streaming
         with self.buffer_lock:
             self.log_buffer.append(entry)
-            if len(self.log_buffer) > self.max_buffer_size:
+            if len(self.log_buffer) > MAX_BUFFER_SIZE:
                 self.log_buffer.pop(0)
         
-        # Write to client-specific log if client_id provided
-        if client_id and client_id in self.client_loggers:
-            self.client_loggers[client_id].log(level, message, event_type, data)
-        
-        # Stream to all connected clients via WebSocket
-        if self.socketio:
-            self.socketio.emit('log_entry', entry.to_dict())
-        
-        # Also print to console for server-side visibility
-        timestamp_str = datetime.fromtimestamp(entry.timestamp).strftime("%H:%M:%S.%f")[:-3]
-        client_str = f"[{client_id}]" if client_id else "[SYSTEM]"
-        print(f"[{timestamp_str}] {client_str} [{level}] {message}")
-        
-        return entry
-    
-    def get_recent_logs(self, count: int = 50) -> List[Dict]:
-        """Get recent log entries for initial client connection"""
-        with self.buffer_lock:
-            recent = self.log_buffer[-count:] if len(self.log_buffer) > count else self.log_buffer
-            return [entry.to_dict() for entry in recent]
-    
-    def get_client_logs(self, client_id: str) -> List[str]:
-        """Get all logs for a specific client from their log file"""
-        if client_id not in self.client_loggers:
-            return []
-        
-        client_logger = self.client_loggers[client_id]
-        try:
-            with open(client_logger.log_file, 'r') as f:
-                return f.readlines()
-        except Exception as e:
-            self.log("ERROR", f"Failed to read client logs for {client_id}: {e}")
-            return []
-    
-    def get_log_files_info(self) -> List[Dict]:
-        """Get information about all log files"""
-        log_files = []
-        
-        for log_file in self.logs_dir.glob("*.log"):
+        # Stream to WebSocket clients
+        if self.socketio and not getattr(threading.current_thread(), '_emitting_log', False):
             try:
-                stat = log_file.stat()
-                log_files.append({
-                    "filename": log_file.name,
-                    "size": stat.st_size,
-                    "created": stat.st_ctime,
-                    "modified": stat.st_mtime,
-                    "path": str(log_file)
-                })
-            except Exception as e:
-                self.log("ERROR", f"Failed to get info for log file {log_file}: {e}")
+                setattr(threading.current_thread(), '_emitting_log', True)
+                self.socketio.emit('log_entry', entry.to_dict())
+            finally:
+                delattr(threading.current_thread(), '_emitting_log')
         
-        return sorted(log_files, key=lambda x: x["created"], reverse=True)
+        # Print to console for live monitoring
+        ts_str = datetime.fromtimestamp(entry.timestamp).strftime("%H:%M:%S.%f")[:-3]
+        id_str = f"[{client_id}]" if client_id else f"[{SERVER_LOG_ID.upper()}]"
+        print(f"[{ts_str}] {id_str:<10} [{entry.level}] {entry.message}")
+
+    def get_recent_logs(self, count: int = 50) -> List[Dict[str, Any]]:
+        with self.buffer_lock:
+            return [entry.to_dict() for entry in self.log_buffer[-count:]]
 
 # Global logger instance
-logger = RealTimeLogger()
+logger = RealTimeLogger(logs_dir="logs")
 
-# Convenience functions for easy logging
+# Convenience functions
 def log_info(message: str, client_id: Optional[str] = None, **kwargs):
-    return logger.log("INFO", message, client_id=client_id, **kwargs)
+    logger.log("INFO", message, client_id=client_id, **kwargs)
 
 def log_warning(message: str, client_id: Optional[str] = None, **kwargs):
-    return logger.log("WARNING", message, client_id=client_id, **kwargs)
+    logger.log("WARNING", message, client_id=client_id, **kwargs)
 
 def log_error(message: str, client_id: Optional[str] = None, **kwargs):
-    return logger.log("ERROR", message, client_id=client_id, **kwargs)
+    logger.log("ERROR", message, client_id=client_id, **kwargs)
 
 def log_debug(message: str, client_id: Optional[str] = None, **kwargs):
-    return logger.log("DEBUG", message, client_id=client_id, **kwargs)
+    # Note: Python's root logger level is INFO by default
+    logger.log("DEBUG", message, client_id=client_id, **kwargs)
