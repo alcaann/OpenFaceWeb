@@ -30,14 +30,14 @@ from config import api_config
 from utils.startup import check_startup_requirements
 
 # Import models
-from models.analyzer import OpenFaceAnalyzer
+from core.engine.analyzer import OpenFaceAnalyzer
 
 # Import routes
-from routes import health_bp, analysis_bp, logs_bp
-from routes.analysis import set_analyzer
+from api.routes import health_bp, analysis_bp, logs_bp
+from api.routes.analysis import set_analyzer
 
 # Import WebSocket handlers
-from websocket import register_websocket_handlers, set_dependencies
+from api.websocket import register_websocket_handlers, set_dependencies
 
 # Import logging
 from logger import logger, log_info
@@ -49,7 +49,7 @@ def create_app(analyzer):
     app.config['SECRET_KEY'] = 'dev'
     
     # Set analyzer for routes that need it
-    from routes.analysis import set_analyzer
+    from api.routes.analysis import set_analyzer
     set_analyzer(analyzer)
     
     # Register blueprints

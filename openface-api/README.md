@@ -11,20 +11,24 @@ This directory contains a high-performance, real-time facial analysis API powere
 
 ## Project Structure
 
-The API is organized into a clean, minimalist structure suitable for production environments:
+The API is organized into a clean, modular structure:
 
 ```
 openface-api/
 ├── app.py                  # Main application entry point and Flask/SocketIO setup
 ├── config.py               # API configuration settings
 ├── logger.py               # Real-time logging system
-├── openapi.yaml            # API documentation (OpenAPI 3.0)
 ├── requirements.txt        # Python dependencies
 ├── Dockerfile              # Instructions for building the Docker container
 │
-├── models/                 # Face analysis engine and model loaders
-├── routes/                 # HTTP route handlers (e.g., /health, /api/analyze)
-├── websocket/              # WebSocket event handlers (connect, disconnect, analyze_frame)
+├── core/
+│   └── engine/             # Face analysis engine and model loaders
+│
+├── api/
+│   ├── routes/             # HTTP route handlers (e.g., /health, /api/analyze)
+│   ├── websocket/          # WebSocket event handlers
+│   └── openapi.yaml        # API documentation (OpenAPI 3.0)
+│
 ├── utils/                  # Shared utilities (e.g., image processing, path management)
 │
 ├── scripts/                # Utility and maintenance scripts

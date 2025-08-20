@@ -37,6 +37,7 @@ def register_websocket_handlers(socketio):
         
         if logger:
             logger.register_client(client_id)
+            logger.log("INFO", f"Client connected: {client_id}", event_type="client_connect")
         
         emit('connected', {
             "success": True, 

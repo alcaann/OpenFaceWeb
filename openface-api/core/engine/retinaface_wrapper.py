@@ -9,14 +9,18 @@ import os
 import importlib.util
 from pathlib import Path
 
+from utils.path_manager import path_manager
+
 def load_retinaface_components():
     """Load RetinaFace components with proper module resolution"""
     try:
-        # Find OpenFace-3.0 path
-        openface_path = Path(__file__).parent.parent.parent / "OpenFace-3.0"
-        retinaface_path = openface_path / "Pytorch_Retinaface"
+        if not path_manager.openface_path:
+            print("❌ OpenFace path not found by PathManager")
+            return None, None, None, None, None, None
+
+        retinaface_path = path_manager.retinaface_dir
         
-        if not retinaface_path.exists():
+        if not retinaface_path or not retinaface_path.exists():
             return None, None, None, None, None, None
             
         # Save original state for restoration

@@ -65,7 +65,15 @@ class FileLogger:
         with self.file_lock:
             with open(self.log_file, 'a') as f:
                 ts_str = datetime.fromtimestamp(entry.timestamp).strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
-                f.write(f"[{ts_str}] [{entry.level}] {entry.message}")
+                
+                status_icon = ""
+                if entry.event_type and "startup" in entry.event_type:
+                    if "fail" in entry.event_type or "warning" in entry.event_type:
+                        status_icon = "❌ "
+                    else:
+                        status_icon = "✅ "
+
+                f.write(f"[{ts_str}] [{entry.level}] {status_icon}{entry.message}")
                 if entry.event_type:
                     f.write(f" | Event: {entry.event_type}")
                 if entry.data:

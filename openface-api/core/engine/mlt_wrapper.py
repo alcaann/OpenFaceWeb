@@ -7,14 +7,18 @@ import sys
 import os
 from pathlib import Path
 
+from utils.path_manager import path_manager
+
 def load_mlt_model():
     """Load MLT model handling relative imports"""
     try:
-        # Find OpenFace-3.0 path
-        openface_path = Path(__file__).parent.parent.parent / "OpenFace-3.0"
-        model_path = openface_path / "model"
+        if not path_manager.openface_path:
+            print("❌ OpenFace path not found by PathManager")
+            return None
+
+        model_path = path_manager.model_dir
         
-        if not model_path.exists():
+        if not model_path or not model_path.exists():
             print(f"❌ Model path not found: {model_path}")
             return None
             
