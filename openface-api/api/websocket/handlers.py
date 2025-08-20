@@ -45,6 +45,7 @@ def register_websocket_handlers(socketio):
             "message": "Connection successful."
         })
         print(f"🔌 Client connected: sid={sid}, client_id={client_id}")
+        print(f"✅ Connection response sent to client {client_id}")
 
     @socketio.on('disconnect')
     def handle_disconnect():
@@ -53,11 +54,11 @@ def register_websocket_handlers(socketio):
         client_id = client_id_map.pop(sid, None)
         
         if client_id:
+            print(f"🔌 Client disconnected: sid={sid}, client_id={client_id}")
             if logger:
                 logger.unregister_client(client_id)
             with summary_lock:
                 analysis_summary.pop(client_id, None)
-            print(f"🔌 Client disconnected: sid={sid}, client_id={client_id}")
         else:
             print(f"🔌 Client disconnected: sid={sid} (no client_id found)")
 
@@ -66,31 +67,49 @@ def register_websocket_handlers(socketio):
         """Handles a single frame for analysis."""
         sid = request.sid
         client_id = client_id_map.get(sid)
+        print(f"📥 Received frame from client {client_id} (sid: {sid})")
+        
         if not client_id:
+            print(f"❌ No client_id found for sid: {sid}")
             emit('analysis_error', {"error": "Client not registered. Please reconnect."})
             return
 
         if not analyzer:
+            print(f"❌ Analyzer not initialized")
             emit('analysis_error', {"error": "Analyzer not initialized."})
             return
 
         is_valid, error = validate_analysis_request(data)
         if not is_valid:
+            print(f"❌ Invalid request: {error}")
             emit('analysis_error', {"error": error})
             return
 
         try:
+            print(f"🔄 Starting frame analysis for client {client_id}")
             frame = decode_base64_image(data['image'])
             result = analyzer.analyze_frame(frame)
             
             # Update and log summary instead of every frame
             update_analysis_summary(client_id, result)
             
+            # Send analysis result
+            print(f"📊 Sending analysis result to client {client_id}")
             emit('analysis_result', result)
+            
+            # Signal that backend is ready for the next frame
+            print(f"🚀 Sending ready signal to client {client_id}")
+            emit('ready_for_next_frame', {"timestamp": time.time()})
+            print(f"✅ Frame processing complete for client {client_id}")
+            
         except Exception as e:
+            print(f"❌ Frame analysis failed for client {client_id}: {e}")
             if logger:
                 logger.log("ERROR", f"Frame analysis failed: {e}", client_id=client_id, event_type="analysis_error")
             emit('analysis_error', {"error": str(e)})
+            # Still signal ready for next frame even on error to avoid hanging
+            print(f"🚀 Sending ready signal after error to client {client_id}")
+            emit('ready_for_next_frame', {"timestamp": time.time()})
 
     def update_analysis_summary(client_id, result):
         """Updates and periodically logs a summary of the analysis."""

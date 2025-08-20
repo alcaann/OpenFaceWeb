@@ -5,6 +5,7 @@ export class OpenFaceWebSocketService {
   private socket: Socket | null = null
   private onStatusChange: ((message: string, status: ConnectionStatus) => void) | null = null
   private onAnalysisResult: ((data: AnalysisResult) => void) | null = null
+  private onReadyForNextFrame: ((timestamp: number) => void) | null = null
 
   constructor() {
     // Constructor can be empty or take initial configuration
@@ -48,6 +49,13 @@ export class OpenFaceWebSocketService {
         }
       })
 
+      this.socket.on('ready_for_next_frame', (data: { timestamp: number }) => {
+        console.log('🚀 Backend ready for next frame')
+        if (this.onReadyForNextFrame) {
+          this.onReadyForNextFrame(data.timestamp)
+        }
+      })
+
       this.socket.on('analysis_error', (data: { error: string }) => {
         console.error('❌ Analysis error:', data.error)
         this.updateStatus('Analysis error: ' + data.error, 'disconnected')
@@ -75,7 +83,11 @@ export class OpenFaceWebSocketService {
       return
     }
 
-    console.log('📤 Sending frame for analysis...')
+    console.log('📤 Sending frame for analysis...', {
+      timestamp,
+      imageDataLength: imageData.length,
+      socketConnected: this.socket.connected
+    })
     this.socket.emit('analyze_frame', {
       image: imageData,
       timestamp
@@ -96,6 +108,10 @@ export class OpenFaceWebSocketService {
 
   setAnalysisResultHandler(handler: (data: AnalysisResult) => void): void {
     this.onAnalysisResult = handler
+  }
+
+  setReadyForNextFrameHandler(handler: (timestamp: number) => void): void {
+    this.onReadyForNextFrame = handler
   }
 
   private updateStatus(message: string, status: ConnectionStatus): void {
