@@ -114,15 +114,18 @@ def register_websocket_handlers(socketio):
 
             if now - summary["last_log_time"] > SUMMARY_INTERVAL:
                 avg_proc_time = summary["total_processing_time"] / summary["frame_count"]
+                fps = summary["frame_count"] / (now - summary["last_log_time"])
                 if logger:
                     logger.log("INFO", 
-                               f"Analysis in progress: {summary['frame_count']} frames processed.",
+                               f"Analysis performance: {summary['frame_count']} frames in {SUMMARY_INTERVAL}s ({fps:.1f} FPS)",
                                client_id=client_id,
                                event_type="analysis_progress",
                                data={
                                    "frames_processed": summary['frame_count'],
                                    "avg_faces": f"{summary['total_faces'] / summary['frame_count']:.2f}",
-                                   "avg_processing_time_ms": f"{avg_proc_time:.2f}"
+                                   "avg_processing_time_ms": f"{avg_proc_time:.2f}",
+                                   "fps": f"{fps:.1f}",
+                                   "interval_seconds": SUMMARY_INTERVAL
                                })
                 # Reset for next interval
                 summary["last_log_time"] = now

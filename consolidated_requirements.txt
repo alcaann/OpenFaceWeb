@@ -17,6 +17,9 @@ scipy
 matplotlib
 seaborn
 
+# System monitoring
+psutil
+
 # ML utilities
 timm
 huggingface_hub

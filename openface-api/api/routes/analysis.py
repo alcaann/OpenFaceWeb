@@ -3,7 +3,6 @@
 Analysis routes for OpenFace API
 """
 
-import time
 from flask import Blueprint, request, jsonify
 
 try:
@@ -17,6 +16,9 @@ except ImportError:
 
 from utils.validation import validate_file_upload
 from utils.image_utils import decode_base64_image
+
+# Import logging
+from logger import log_info
 
 analysis_bp = Blueprint('analysis', __name__)
 

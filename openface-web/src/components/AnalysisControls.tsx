@@ -33,12 +33,12 @@ export function AnalysisControls({
   
   return (
     <>
-      <div className="my-5 p-4 bg-gray-50 rounded-lg">
-        <h3 className="mb-4 text-lg font-semibold text-gray-800">Analysis Settings</h3>
+      <div className="my-5 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
+        <h3 className="mb-4 text-lg font-semibold text-gray-800 dark:text-gray-200">Analysis Settings</h3>
         
         <div className="space-y-4">
           <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
-            <label className="min-w-[120px] font-medium text-gray-700">Frame Rate:</label>
+            <label className="min-w-[120px] font-medium text-gray-700 dark:text-gray-300">Frame Rate:</label>
             <input
               type="range"
               min="1"
@@ -47,13 +47,13 @@ export function AnalysisControls({
               onChange={(e) => onFrameRateChange(parseInt(e.target.value))}
               className="flex-1 min-w-[150px] accent-blue-600"
             />
-            <span className="text-sm font-mono bg-white px-2 py-1 rounded border">
+            <span className="text-sm font-mono bg-white dark:bg-gray-700 dark:text-gray-200 px-2 py-1 rounded border dark:border-gray-600">
               {frameRate} FPS
             </span>
           </div>
           
           <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
-            <label className="min-w-[120px] font-medium text-gray-700">Video Quality:</label>
+            <label className="min-w-[120px] font-medium text-gray-700 dark:text-gray-300">Video Quality:</label>
             <input
               type="range"
               min="0.1"
@@ -63,7 +63,7 @@ export function AnalysisControls({
               onChange={(e) => onVideoQualityChange(parseFloat(e.target.value))}
               className="flex-1 min-w-[150px] accent-blue-600"
             />
-            <span className="text-sm font-mono bg-white px-2 py-1 rounded border">
+            <span className="text-sm font-mono bg-white dark:bg-gray-700 dark:text-gray-200 px-2 py-1 rounded border dark:border-gray-600">
               {videoQuality}
             </span>
           </div>

@@ -42,6 +42,9 @@ from api.websocket import register_websocket_handlers, set_dependencies
 # Import logging
 from logger import logger, log_info
 
+# Import hardware monitoring
+from utils.hardware_monitor import log_startup_hardware_report, log_model_info
+
 
 def create_app(analyzer):
     """Create and configure the Flask application"""
@@ -67,6 +70,9 @@ def main():
     
     # Initialize logging system
     log_info("OpenFace API starting up...", event_type="startup")
+    
+    # Log comprehensive hardware information
+    log_startup_hardware_report()
     
     # Initialize face analyzer
     print("🚀 Initializing OpenFace Analyzer...")
@@ -120,6 +126,12 @@ def main():
                  "analysis_model": analysis_model,
                  "device": str(analyzer.device) if analyzer.device else "CPU"
              })
+    
+    # Log individual model specifications
+    if analyzer.retinaface:
+        log_model_info(analyzer.retinaface, "RetinaFace")
+    if analyzer.mlt_model:
+        log_model_info(analyzer.mlt_model, "MLT")
     
     log_info("API Ready to receive requests", event_type="startup_complete")
     log_info(f"Starting OpenFace-3.0 Flask API", event_type="startup")

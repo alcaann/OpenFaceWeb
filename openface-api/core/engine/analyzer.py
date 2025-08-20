@@ -73,6 +73,14 @@ except Exception as e:
 # Local imports
 from config import config, api_config
 
+# Import hardware monitoring
+try:
+    from utils.hardware_monitor import log_model_info, get_current_gpu_memory
+    from logger import log_info as log_info_func
+    HARDWARE_MONITOR_AVAILABLE = True
+except ImportError:
+    HARDWARE_MONITOR_AVAILABLE = False
+
 
 class OpenFaceAnalyzer:
     """OpenFace facial analysis engine for API with lazy loading"""
@@ -161,6 +169,10 @@ class OpenFaceAnalyzer:
                     self._retinaface.eval()
                     self._retinaface = self._retinaface.to(self.device)
                     print(f"✅ RetinaFace loaded from: {retinaface_weights}")
+                    
+                    # Log model information
+                    if HARDWARE_MONITOR_AVAILABLE:
+                        log_model_info(self._retinaface, "RetinaFace")
                 else:
                     print(f"⚠️  RetinaFace weights not found: {retinaface_weights}")
                     self._retinaface = None
@@ -190,6 +202,10 @@ class OpenFaceAnalyzer:
                     self._mlt_model.eval()
                     self._mlt_model = self._mlt_model.to(self.device)
                     print(f"✅ MLT model loaded from: {mlt_weights}")
+                    
+                    # Log model information
+                    if HARDWARE_MONITOR_AVAILABLE:
+                        log_model_info(self._mlt_model, "MLT")
                 else:
                     print(f"⚠️  MLT weights not found: {mlt_weights}")
                     self._mlt_model = None
@@ -290,12 +306,18 @@ class OpenFaceAnalyzer:
             print(f"Error in OpenCV detection: {e}")
             return np.array([])
     
-    def detect_faces(self, img):
-        """Detect faces using available method"""
-        if self.retinaface is not None:
-            return self.detect_faces_retinaface(img)
-        else:
-            return self.detect_faces_opencv(img)
+    def detect_faces(self, frame):
+        """Detect faces in frame using RetinaFace or OpenCV"""
+        try:
+            if self.retinaface is not None:
+                return self.detect_faces_retinaface(frame)
+            elif self.face_cascade is not None:
+                return self.detect_faces_opencv(frame)
+            else:
+                return []
+        except Exception as e:
+            print(f"Face detection error: {e}")
+            return []
     
     def crop_face(self, img, bbox, margin=0.2):
         """Crop face region with margin"""
@@ -312,6 +334,28 @@ class OpenFaceAnalyzer:
         y2 = min(h, y2 + margin_y)
         
         return img[y1:y2, x1:x2]
+    
+    def _get_gpu_memory_info(self):
+        """Get current GPU memory information"""
+        if not TORCH_AVAILABLE or not torch.cuda.is_available():
+            return None
+        
+        try:
+            current_device = torch.cuda.current_device()
+            allocated = torch.cuda.memory_allocated(current_device)
+            reserved = torch.cuda.memory_reserved(current_device)
+            total = torch.cuda.get_device_properties(current_device).total_memory
+            
+            return {
+                "device_id": current_device,
+                "allocated_mb": round(allocated / (1024**2), 1),
+                "reserved_mb": round(reserved / (1024**2), 1),
+                "total_mb": round(total / (1024**2), 1),
+                "free_mb": round((total - allocated) / (1024**2), 1),
+                "utilization_percent": round((allocated / total) * 100, 1)
+            }
+        except Exception as e:
+            return {"error": str(e)}
     
     def analyze_face(self, face_img):
         """Analyze face for emotion, AUs, and gaze"""
@@ -429,7 +473,8 @@ class OpenFaceAnalyzer:
                 "system_info": {
                     "device": str(self.device) if self.device else "CPU (PyTorch not available)",
                     "face_detector": "RetinaFace" if self.retinaface else "OpenCV",
-                    "analysis_model": "MLT" if self.mlt_model else "None"
+                    "analysis_model": "MLT" if self.mlt_model else "None",
+                    "gpu_memory_info": self._get_gpu_memory_info() if TORCH_AVAILABLE and torch.cuda.is_available() else None
                 }
             }
             

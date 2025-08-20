@@ -179,11 +179,11 @@ const LogConsole: React.FC<LogConsoleProps> = ({
   };
 
   return (
-    <div className="w-full border rounded-lg shadow-sm" style={{ contain: 'layout' }}>
+    <div className="w-full border border-gray-200 dark:border-gray-600 rounded-lg shadow-sm bg-white dark:bg-gray-800" style={{ contain: 'layout' }}>
       {/* Header */}
-      <div className="p-4 border-b bg-gray-50">
+      <div className="p-4 border-b border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700">
         <div className="flex items-center justify-between mb-3">
-          <h3 className="text-lg font-semibold">
+          <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-200">
             API Console Logs
             <span 
               className={`ml-2 text-sm ${isConnected ? 'text-green-600' : 'text-red-600'}`}
@@ -212,11 +212,11 @@ const LogConsole: React.FC<LogConsoleProps> = ({
         {/* Filters */}
         <div className="flex gap-4 text-sm">
           <div>
-            <label className="block text-gray-600 mb-1">Level:</label>
+            <label className="block text-gray-600 dark:text-gray-400 mb-1">Level:</label>
             <select
               value={filter.level}
               onChange={(e) => setFilter(prev => ({ ...prev, level: e.target.value }))}
-              className="border rounded px-2 py-1"
+              className="border border-gray-300 dark:border-gray-600 rounded px-2 py-1 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-200"
             >
               {getUniqueValues('level').map(level => (
                 <option key={level} value={level}>{level}</option>
@@ -225,11 +225,11 @@ const LogConsole: React.FC<LogConsoleProps> = ({
           </div>
 
           <div>
-            <label className="block text-gray-600 mb-1">Event:</label>
+            <label className="block text-gray-600 dark:text-gray-400 mb-1">Event:</label>
             <select
               value={filter.eventType}
               onChange={(e) => setFilter(prev => ({ ...prev, eventType: e.target.value }))}
-              className="border rounded px-2 py-1"
+              className="border border-gray-300 dark:border-gray-600 rounded px-2 py-1 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-200"
             >
               {getUniqueValues('event_type').map(eventType => (
                 <option key={eventType} value={eventType}>{eventType}</option>
@@ -238,11 +238,11 @@ const LogConsole: React.FC<LogConsoleProps> = ({
           </div>
 
           <div>
-            <label className="block text-gray-600 mb-1">Client:</label>
+            <label className="block text-gray-600 dark:text-gray-400 mb-1">Client:</label>
             <select
               value={filter.clientId}
               onChange={(e) => setFilter(prev => ({ ...prev, clientId: e.target.value }))}
-              className="border rounded px-2 py-1"
+              className="border border-gray-300 dark:border-gray-600 rounded px-2 py-1 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-200"
             >
               {getUniqueValues('client_id').map(clientId => (
                 <option key={clientId} value={clientId}>
@@ -253,7 +253,7 @@ const LogConsole: React.FC<LogConsoleProps> = ({
           </div>
 
           <div className="flex items-end">
-            <label className="flex items-center">
+            <label className="flex items-center text-gray-600 dark:text-gray-400">
               <input
                 type="checkbox"
                 checked={autoScroll}
@@ -347,7 +347,7 @@ const LogConsole: React.FC<LogConsoleProps> = ({
       </div>
 
       {/* Status bar */}
-      <div className="px-3 py-2 bg-gray-50 border-t text-xs text-gray-600 flex justify-between">
+      <div className="px-3 py-2 bg-gray-50 dark:bg-gray-700 border-t border-gray-200 dark:border-gray-600 text-xs text-gray-600 dark:text-gray-400 flex justify-between">
         <span>
           Showing {filteredLogs.length} of {logs.length} logs
         </span>
