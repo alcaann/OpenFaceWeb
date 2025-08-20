@@ -8,7 +8,7 @@ import { ConnectionControls } from '@/components/ConnectionControls'
 import { AnalysisControls } from '@/components/AnalysisControls'
 import { VideoDisplay } from '@/components/VideoDisplay'
 import { AnalysisResults } from '@/components/AnalysisResults'
-import LogConsole from '@/components/LogConsoleNew'
+import LogConsole from '@/components/LogConsole'
 
 export default function Home() {
   // Settings state
@@ -51,11 +51,11 @@ export default function Home() {
   const canStartAnalysis = analysis.isConnected() && video.isCameraActive
 
   return (
-    <div className="container">
-      <div className="card">
-        <div className="header">
-          <h1>🎥 OpenFace-3.0 Real-time Analysis</h1>
-          <p>Facial analysis with emotion detection and gaze tracking</p>
+    <div className="max-w-7xl mx-auto p-5 bg-gray-50 min-h-screen">
+      <div className="bg-white rounded-xl p-6 shadow-lg mb-5">
+        <div className="text-center text-gray-800 mb-8">
+          <h1 className="text-4xl font-bold mb-3">🎥 OpenFace-3.0 Real-time Analysis</h1>
+          <p className="text-gray-600 text-lg">Facial analysis with emotion detection and gaze tracking</p>
         </div>
 
         <StatusDisplay status={analysis.status} message={analysis.statusMessage} />
@@ -68,7 +68,7 @@ export default function Home() {
           isConnected={analysis.isConnected()}
         />
 
-                <AnalysisControls
+        <AnalysisControls
           frameRate={frameRate}
           onFrameRateChange={setFrameRate}
           videoQuality={videoQuality}
@@ -84,7 +84,7 @@ export default function Home() {
           isStartingCamera={video.isStartingCamera}
         />
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
           <VideoDisplay
             videoRef={video.videoRef}
             canvasRef={video.canvasRef}
@@ -94,7 +94,7 @@ export default function Home() {
         </div>
 
         {/* Real-time Logging Console */}
-        <div className="mb-4" style={{ contain: 'layout' }}>
+        <div className="mb-6">
           <LogConsole 
             socket={analysis.socket} 
             maxLogs={100} 
